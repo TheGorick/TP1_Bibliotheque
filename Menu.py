@@ -1,19 +1,21 @@
 # Guillaume Pinat
 
-from Bibliotheque import Bibliotheque
+from Bibliotheque import Bibliotheque, Emprunts, SauvegardeFichiers
 from Documents import Livre, BandeDessinee
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QLineEdit, QInputDialog, QMessageBox, QComboBox
+
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QLineEdit, QInputDialog, QMessageBox
 from functools import partial
 
 class Menu(QWidget):
-
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Menu")
         self.setGeometry(100, 100, 300, 400)
-        self.bibliotheque = Bibliotheque()
 
-        layout = QVBoxLayout()  # QVBoxLayout fait un layout vertical
+        self.bibliotheque = Bibliotheque()  # Initialisation de bibliotheque
+        self.emprunts = Emprunts(self.bibliotheque)  # Initialisation d'emprunts après bibliotheque
+
+        layout = QVBoxLayout()
 
         # Liste des boutons de l'interface
         self.boutons = [
@@ -76,7 +78,7 @@ class Menu(QWidget):
             6: self.bibliotheque.afficher_documents,
             7: self.activer_emprunt,
             8: self.activer_retour,
-            9: self.bibliotheque.afficher_emprunts,
+            9: self.emprunts.afficher_emprunts,
             10: self.close
         }
         fonctions[choix]()  # Appelle la fonction correspondante au choix
@@ -183,8 +185,8 @@ class Menu(QWidget):
                     abonne_objet = a
                     break
 
-            # Emprunte le document en utilisant le titre sélectionné et l'abonné choisi
-            self.bibliotheque.emprunter_document(titre, abonne_objet)
+            self.emprunts.emprunter_document(titre, abonne_objet)
+
 
     def activer_retour(self):
         # Crée une liste des titres des documents empruntés
@@ -201,10 +203,14 @@ class Menu(QWidget):
                                          empruntes_str, 0, False)
 
         if ok:
-            # Retourne le document en utilisant le titre sélectionné
-            self.bibliotheque.retourner_document(titre)
+            self.emprunts.retourner_document(titre)
 
     def close(self):
         # Avant de fermer, on sauvegarde les données
-        self.bibliotheque.sauvegarder_donnees()
+        try:
+            SauvegardeFichiers.sauvegarder_abonnes(self.bibliotheque.abonnes)
+            SauvegardeFichiers.sauvegarder_documents(self.bibliotheque.documents)
+            SauvegardeFichiers.sauvegarder_emprunts(self.emprunts.emprunts)
+        except Exception as e:
+            print(f'Erreur : {e}')
         super().close()  # Appel à la méthode de fermeture de QWidget

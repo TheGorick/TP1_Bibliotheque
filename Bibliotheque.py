@@ -6,52 +6,50 @@ import csv
 
 class Bibliotheque:
     def __init__(self):
-        # Initialisation des listes pour les abonnés, documents, et emprunts
-        self.abonnes = []
-        self.documents = []
-        self.emprunts = []
+        self.abonnes = []  # Liste des abonnés
+        self.documents = []  # Liste des documents
 
     # Gestion des abonnés
     def ajouter_abonne(self, prenom, nom):
-        # Vérifie si l'abonné existe déjà avant de l'ajouter
+        """Ajoute un abonné si il n'existe pas déjà."""
         for a in self.abonnes:
             if a.prenom == prenom and a.nom == nom:
                 print("Abonné déjà existant.")
-                return False  # Abonné déjà existant
-        self.abonnes.append(Abonne(prenom, nom))  # Ajoute l'abonné
+                return False
+        self.abonnes.append(Abonne(prenom, nom))
         print(f'Abonné {prenom} {nom} ajouté avec succès.')
         return True
 
     def supprimer_abonne(self, prenom, nom):
-        # Recherche et supprime l'abonné correspondant
+        """Supprime un abonné s'il existe."""
         for abonne in self.abonnes:
             if abonne.prenom == prenom and abonne.nom == nom:
                 self.abonnes.remove(abonne)
                 print(f'Abonné {prenom} {nom} supprimé avec succès.')
                 return True
-        print(f'Abonné {prenom} {nom} non trouvé.')  # Si l'abonné n'est pas trouvé
+        print(f'Abonné {prenom} {nom} non trouvé.')
         return False
 
     def afficher_abonnes(self):
-        # Affiche la liste des abonnés ou un message si la liste est vide
+        """Affiche la liste des abonnés."""
         if not self.abonnes:
             print("Aucun abonné enregistré.")
         for abonne in self.abonnes:
             print(abonne)
 
     # Gestion des documents
-    def ajouter_document(self, titre):
-        # Vérifie si le document existe déjà avant de l'ajouter
+    def ajouter_document(self, document):
+        """Ajoute un document à la bibliothèque s'il n'existe pas déjà."""
         for doc in self.documents:
-            if doc.titre == titre:
-                print(f"Document '{titre}' déjà existant.")
+            if doc.titre == document.titre:
+                print(f"Document '{document.titre}' déjà existant.")
                 return False
-        self.documents.append(titre)  # Ajoute le document à la liste
-        print(f"Document '{titre}' ajouté avec succès.")
+        self.documents.append(document)  # Ajoute le document à la liste
+        print(f"Document '{document}' ajouté avec succès.")
         return True
 
     def supprimer_document(self, titre):
-        # Recherche et supprime le document correspondant
+        """Supprime un document s'il existe."""
         for doc in self.documents:
             if doc.titre == titre:
                 self.documents.remove(doc)
@@ -61,16 +59,20 @@ class Bibliotheque:
         return False
 
     def afficher_documents(self):
-        # Affiche la liste des documents ou un message si la liste est vide
+        """Affiche la liste des documents."""
         if not self.documents:
             print("Aucun document enregistré.")
         for doc in self.documents:
             print(doc)
 
-    # Gestion des emprunts
+class Emprunts:
+    def __init__(self, bibliotheque):
+        self.bibliotheque = bibliotheque  # Référence à la bibliothèque
+        self.emprunts = []  # Liste des emprunts
+
     def emprunter_document(self, titre, abonne):
-        # Recherche le document à emprunter
-        for doc in self.documents:
+        """Permet à un abonné d'emprunter un document s'il est disponible."""
+        for doc in self.bibliotheque.documents:
             if isinstance(doc, Livre) and doc.titre == titre:
                 if doc.disponible:
                     doc.disponible = False  # Le document n'est plus disponible
@@ -84,44 +86,50 @@ class Bibliotheque:
         print(f"Le document '{titre}' n'a pas été trouvé.")
 
     def retourner_document(self, titre):
-        # Recherche si le document est un livre et si il peut être retourné
-        for doc in self.documents:
+        """Permet de retourner un document emprunté."""
+        for doc in self.bibliotheque.documents:
             if isinstance(doc, Livre) and doc.titre == titre:
-                doc.retourner()  # Appelle la méthode retourner du livre
+                doc.retourner()
                 return
-        print(f'Livre {titre} non trouvé ou déjà retourné.')  # Si le livre n'est pas trouvé ou déjà retourné
+        print(f'Livre {titre} non trouvé ou déjà retourné.')
 
     def afficher_emprunts(self):
+        """Affiche la liste des emprunts en cours."""
         if not self.emprunts:
             print("Aucun livre emprunté.")
         else:
             for emprunt in self.emprunts:
-                print(
-                    f"Document: {emprunt['titre']}, Emprunté par: {emprunt['abonne']}")
+                print(f"Document: {emprunt['titre']}, Emprunté par: {emprunt['abonne']}")
 
-    # Sauvegarde des données dans des fichiers txt
-    def sauvegarder_donnees(self):
-        # Sauvegarde des abonnés dans le fichier "abonnes.txt"
-        with open("abonnes.txt", mode="w", newline="") as file:
+class SauvegardeFichiers:
+    """Classe pour gérer la sauvegarde des données dans des fichiers txt."""
+
+    @staticmethod
+    def sauvegarder_abonnes(abonnes, fichier="abonnes.txt"):
+        """Sauvegarde la liste des abonnés dans un fichier."""
+        with open(fichier, mode="w", newline="") as file:
             writer = csv.writer(file)
-            writer.writerow(["Prenom", "Nom"])  # Entête
-            for abonne in self.abonnes:
+            writer.writerow(["Prenom", "Nom"])
+            for abonne in abonnes:
                 writer.writerow([abonne.prenom, abonne.nom])
 
-        # Sauvegarde des documents dans le fichier "biblio.txt"
-        with open("biblio.txt", mode="w", newline="") as file:
+    @staticmethod
+    def sauvegarder_documents(documents, fichier="biblio.txt"):
+        """Sauvegarde la liste des documents dans un fichier."""
+        with open(fichier, mode="w", newline="") as file:
             writer = csv.writer(file)
-            writer.writerow(["Titre", "Auteur", "Type", "Dessinateur"])  # Entête
-            for doc in self.documents:
+            writer.writerow(["Titre", "Auteur", "Type", "Dessinateur"])
+            for doc in documents:
                 if isinstance(doc, Livre):
-                    writer.writerow([doc.titre, doc.auteur, "Livre", ""])  # Sauvegarde les livres
+                    writer.writerow([doc.titre, doc.auteur, "Livre", ""])
                 elif isinstance(doc, BandeDessinee):
-                    writer.writerow([doc.titre, doc.auteur, "Bande Dessinee", doc.dessinateur])  # Sauvegarde les BD
+                    writer.writerow([doc.titre, doc.auteur, "Bande Dessinee", doc.dessinateur])
 
-        # Sauvegarde des emprunts dans le fichier "emprunts.txt"
-        with open("emprunts.txt", mode="w", newline="") as file:
+    @staticmethod
+    def sauvegarder_emprunts(emprunts, fichier="emprunts.txt"):
+        """Sauvegarde la liste des emprunts dans un fichier."""
+        with open(fichier, mode="w", newline="") as file:
             writer = csv.writer(file)
-            writer.writerow(["Titre", "Emprunté par"])  # Entête
-            for emprunt in self.emprunts:
-                # Accède à 'abonne' au lieu de 'emprunteur'
+            writer.writerow(["Titre", "Emprunté par"])
+            for emprunt in emprunts:
                 writer.writerow([emprunt['titre'], emprunt['abonne']])
