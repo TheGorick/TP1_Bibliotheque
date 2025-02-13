@@ -7,6 +7,7 @@ from PyQt6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QLineEdit, QInput
 from functools import partial
 
 class Menu(QWidget):
+    """Classe qui créer un menu et gère les demandes des utilisateurs"""
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Menu")
@@ -61,7 +62,7 @@ class Menu(QWidget):
             if 1 <= choix <= 9:  # Vérifie si le choix est valide
                 self.active_choix(choix)  # Exécute la fonction associée à l'option choisie
             else:
-                print("Option invalide, veuillez entrer un chiffre entre 1 et 9.")
+                print("Entrée invalide. Veuillez entrer un chiffre entre 1 et 9 ou 'Q' pour quitter.")
         elif text.lower() == 'q':  # Si l'utilisateur entre 'q' ou 'Q'
             self.close()
         else:
@@ -83,35 +84,58 @@ class Menu(QWidget):
         }
         fonctions[choix]()  # Appelle la fonction correspondante au choix
 
+    def nom_valide(self, nom):
+        #Validation du prenom et nom entré
+        if len(nom) < 2:  # Vérifie que la longueur du nom est d'au moins 2 caractères
+            return False
+        for char in nom:  # Parcourt chaque caractère du nom
+            if not (char.isalpha() or char in " -"):  # Vérifie si c'est une lettre, un espace ou un tiret
+                return False
+        return True
+
     def activer_ajout_abonne(self):
-        # Demande le prénom de l'abonné via un QInputDialog
-        prenom, ok1 = QInputDialog.getText(self, "Ajouter un abonné", "Entrez le prénom de l'abonné :")
-        if not ok1:  # Si l'utilisateur annule la saisie
-            return
 
-        # Demande le nom de l'abonné
-        nom, ok2 = QInputDialog.getText(self, "Ajouter un abonné", "Entrez le nom de l'abonné :")
-        if not ok2:
-            return
+        # Demande et valide le prénom
+        while True:
+            prenom, ok1 = QInputDialog.getText(self, "Ajouter un abonné", "Entrez le prénom de l'abonné :")
+            if not ok1:  # Si l'utilisateur annule la saisie, on quitte la fonction
+                return
+            if self.nom_valide(prenom):  # Vérifie que le prénom est valide
+                break
+            self.afficher_message("Le prénom doit contenir au moins 2 lettres et ne peut contenir que des lettres, espaces ou tirets.","Erreur")
 
-        # Ajoute l'abonné à la bibliothèque si l'entrée est valide
+        # Demande et valide le nom
+        while True:
+            nom, ok2 = QInputDialog.getText(self, "Ajouter un abonné", "Entrez le nom de l'abonné :")
+            if not ok2:  # Si l'utilisateur annule, on quitte la fonction
+                return
+            if self.nom_valide(nom):  # Vérifie que le nom est valide
+                break
+            self.afficher_message(
+                "Le nom doit contenir au moins 2 lettres et ne peut contenir que des lettres, espaces ou tirets.",
+                "Erreur"
+            )
+
+        # Ajoute l'abonné à la bibliothèque si les entrées sont valides
         if self.bibliotheque.ajouter_abonne(prenom, nom):
             self.afficher_message(f"Abonné {prenom} {nom} ajouté avec succès.")
         else:
             self.afficher_message("Abonné déjà existant.", "Erreur")
 
     def activer_supprimer_abonne(self):
-        # Récupère une liste des abonnés sous forme de texte "Prénom Nom"
-        abonnes_str = [f"{abonne.prenom} {abonne.nom}" for abonne in self.bibliotheque.abonnes]
+        # Vérifie s'il y a des abonnés avant d'afficher la liste
+        if not self.bibliotheque.abonnes:
+            self.afficher_message("Aucun abonné à supprimer.")
+            return
 
-        # Utilise QInputDialog pour afficher la liste des abonnés
+        # Affiche la liste des abonnés
+        abonnes_str = [f"{abonne.prenom} {abonne.nom}" for abonne in self.bibliotheque.abonnes]
         abonne, ok = QInputDialog.getItem(self, "Supprimer un abonné",
                                           "Choisir l'abonné à supprimer : ",
                                           abonnes_str, 0, False)
-        if ok:  # Si un abonné est sélectionné
-            # Sépare le prénom et le nom à partir du texte sélectionné
+        if ok:
             prenom, nom = abonne.split()
-            self.bibliotheque.supprimer_abonne(prenom, nom)  # Supprime l'abonné sélectionné
+            self.bibliotheque.supprimer_abonne(prenom, nom)
 
     def activer_ajout_document(self):
         # Demande le type de document à ajouter
@@ -120,35 +144,55 @@ class Menu(QWidget):
         if not ok:
             return
 
-        # Demande le titre et l'auteur du document
-        titre, ok1 = QInputDialog.getText(self, "Ajouter un document", "Entrez le titre du document :")
-        if not ok1:
-            return
+        # Demande et valide le titre du document
+        while True:
+            titre, ok1 = QInputDialog.getText(self, "Ajouter un document", "Entrez le titre du document :")
+            if not ok1:  # Annulation
+                return
+            if titre.strip():  # Vérifie que le titre n'est pas vide
+                break
+            self.afficher_message("Le titre ne peut pas être vide.", "Erreur")
 
-        auteur, ok2 = QInputDialog.getText(self, "Ajouter un document", "Entrez l'auteur :")
-        if not ok2:
-            return
+        # Demande et valide l'auteur du document
+        while True:
+            auteur, ok2 = QInputDialog.getText(self, "Ajouter un document", "Entrez l'auteur :")
+            if not ok2:
+                return
+            if auteur.strip():  # Vérifie que l'auteur n'est pas vide
+                break
+            self.afficher_message("L'auteur ne peut pas être vide.", "Erreur")
 
         # Ajoute le document en fonction du type choisi
         if classification.lower() == 'livre':
             self.bibliotheque.ajouter_document(Livre(titre, auteur))
+
         elif classification.lower() == 'bande dessinee':
-            # Demande le dessinateur si c'est une bande dessinée
-            dessinateur, ok3 = QInputDialog.getText(self, "Ajouter une bande dessinée", "Entrez le dessinateur :")
-            if not ok3:
-                return
+            # Demande et valide le dessinateur si c'est une bande dessinée
+            while True:
+                dessinateur, ok3 = QInputDialog.getText(self, "Ajouter une bande dessinée",
+                                                        "Entrez le dessinateur :")
+                if not ok3:
+                    return
+                if dessinateur.strip():  # Vérifie que le dessinateur n'est pas vide
+                    break
+                self.afficher_message("Le dessinateur ne peut pas être vide.", "Erreur")
+
             self.bibliotheque.ajouter_document(BandeDessinee(titre, auteur, dessinateur))
 
-    def activer_supprimer_document(self):
-        # Récupère une liste des titres des documents
-        documents_str = [doc.titre for doc in self.bibliotheque.documents]
 
-        # Utilise QInputDialog pour afficher la liste des documents
-        document, ok = QInputDialog.getItem(self, "Supprimer un document",
-                                            "Choisir le document à supprimer : ",
-                                            documents_str, 0, False)
-        if ok:  # Si un document est sélectionné
-            self.bibliotheque.supprimer_document(document)  # Supprime le document sélectionné
+    def activer_supprimer_document(self):
+        # Vérifie s'il y a des documents avant d'afficher la liste
+        if not self.bibliotheque.documents:
+            self.afficher_message("Aucun document à supprimer.")
+            return
+
+        # Affiche la liste des documents
+        documents_str = [doc.titre for doc in self.bibliotheque.documents]
+        titre, ok = QInputDialog.getItem(self, "Supprimer un document",
+                                         "Choisir le document à supprimer : ",
+                                         documents_str, 0, False)
+        if ok:
+            self.bibliotheque.supprimer_document(titre)
 
     def activer_emprunt(self):
         # Crée une liste des titres des documents empruntables (en excluant ceux déjà empruntés)
