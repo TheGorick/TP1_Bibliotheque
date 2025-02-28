@@ -1,6 +1,6 @@
 # Guillaume Pinat
 
-#TP Mi-Session
+#TP Final
 
 from Menu import Menu
 from PyQt6.QtWidgets import QApplication

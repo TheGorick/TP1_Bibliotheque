@@ -1,7 +1,8 @@
 # Guillaume Pinat
 
-from Bibliotheque import Bibliotheque, Emprunts, SauvegardeFichiers
+from Bibliotheque import Bibliotheque
 from Documents import Livre, BandeDessinee
+from Emprunts import Emprunts
 
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QLineEdit, QInputDialog, QMessageBox
 from functools import partial
@@ -111,10 +112,7 @@ class Menu(QWidget):
                 return
             if self.nom_valide(nom):  # Vérifie que le nom est valide
                 break
-            self.afficher_message(
-                "Le nom doit contenir au moins 2 lettres et ne peut contenir que des lettres, espaces ou tirets.",
-                "Erreur"
-            )
+            self.afficher_message("Le nom doit contenir au moins 2 lettres et ne peut contenir que des lettres, espaces ou tirets.","Erreur")
 
         # Ajoute l'abonné à la bibliothèque si les entrées sont valides
         if self.bibliotheque.ajouter_abonne(prenom, nom):
@@ -123,119 +121,127 @@ class Menu(QWidget):
             self.afficher_message("Abonné déjà existant.", "Erreur")
 
     def activer_supprimer_abonne(self):
-        # Vérifie s'il y a des abonnés avant d'afficher la liste
-        if not self.bibliotheque.abonnes:
+        # Récupérer la liste des abonnés depuis la base de données
+        self.bibliotheque.db.cur.execute("SELECT prenom, nom FROM Abonnes")
+        abonnes = self.bibliotheque.db.cur.fetchall()
+
+        if not abonnes:
             self.afficher_message("Aucun abonné à supprimer.")
             return
 
-        # Affiche la liste des abonnés
-        abonnes_str = [f"{abonne.prenom} {abonne.nom}" for abonne in self.bibliotheque.abonnes]
-        abonne, ok = QInputDialog.getItem(self, "Supprimer un abonné",
-                                          "Choisir l'abonné à supprimer : ",
-                                          abonnes_str, 0, False)
+        # Transformer les tuples en une liste de noms pour l'affichage
+        abonnes_str = [f"{prenom} {nom}" for prenom, nom in abonnes]
+
+        # Afficher la liste déroulante pour choisir un abonné à supprimer
+        abonne, ok = QInputDialog.getItem(self, "Supprimer un abonné", "Choisir l'abonné à supprimer :", abonnes_str, 0,False)
+
         if ok:
             prenom, nom = abonne.split()
             self.bibliotheque.supprimer_abonne(prenom, nom)
 
     def activer_ajout_document(self):
-        # Demande le type de document à ajouter
         classification, ok = QInputDialog.getItem(self, "Ajouter un document", "Choisir le type de document :",
                                                   ["Livre", "Bande Dessinee"], 0, False)
         if not ok:
             return
 
-        # Demande et valide le titre du document
-        while True:
-            titre, ok1 = QInputDialog.getText(self, "Ajouter un document", "Entrez le titre du document :")
-            if not ok1:  # Annulation
+        titre, ok1 = QInputDialog.getText(self, "Ajouter un document", "Entrez le titre du document :")
+        if not ok1 or not titre.strip():
+            return
+
+        auteur, ok2 = QInputDialog.getText(self, "Ajouter un document", "Entrez l'auteur :")
+        if not ok2 or not auteur.strip():
+            return
+
+        if classification.lower() == "livre":
+            document = Livre(titre.strip(), auteur.strip())
+        else:
+            dessinateur, ok3 = QInputDialog.getText(self, "Ajouter une bande dessinée", "Entrez le dessinateur :")
+            if not ok3 or not dessinateur.strip():
                 return
-            if titre.strip():  # Vérifie que le titre n'est pas vide
-                break
-            self.afficher_message("Le titre ne peut pas être vide.", "Erreur")
+            document = BandeDessinee(titre.strip(), auteur.strip(), dessinateur.strip())
 
-        # Demande et valide l'auteur du document
-        while True:
-            auteur, ok2 = QInputDialog.getText(self, "Ajouter un document", "Entrez l'auteur :")
-            if not ok2:
-                return
-            if auteur.strip():  # Vérifie que l'auteur n'est pas vide
-                break
-            self.afficher_message("L'auteur ne peut pas être vide.", "Erreur")
-
-        # Ajoute le document en fonction du type choisi
-        if classification.lower() == 'livre':
-            self.bibliotheque.ajouter_document(Livre(titre, auteur))
-
-        elif classification.lower() == 'bande dessinee':
-            # Demande et valide le dessinateur si c'est une bande dessinée
-            while True:
-                dessinateur, ok3 = QInputDialog.getText(self, "Ajouter une bande dessinée",
-                                                        "Entrez le dessinateur :")
-                if not ok3:
-                    return
-                if dessinateur.strip():  # Vérifie que le dessinateur n'est pas vide
-                    break
-                self.afficher_message("Le dessinateur ne peut pas être vide.", "Erreur")
-
-            self.bibliotheque.ajouter_document(BandeDessinee(titre, auteur, dessinateur))
-
+        if self.bibliotheque.ajouter_document(document):
+            self.afficher_message(f"Document '{titre}' ajouté avec succès.")
+        else:
+            self.afficher_message("Document déjà existant.", "Erreur")
 
     def activer_supprimer_document(self):
-        # Vérifie s'il y a des documents avant d'afficher la liste
-        if not self.bibliotheque.documents:
+        # Récupérer la liste des documents depuis la base de données
+        self.bibliotheque.db.cur.execute("SELECT titre FROM Documents")
+        documents = self.bibliotheque.db.cur.fetchall()
+
+        if not documents:
             self.afficher_message("Aucun document à supprimer.")
             return
 
-        # Affiche la liste des documents
-        documents_str = [doc.titre for doc in self.bibliotheque.documents]
-        titre, ok = QInputDialog.getItem(self, "Supprimer un document",
-                                         "Choisir le document à supprimer : ",
+        # Transformer les résultats SQL en une liste de titres
+        documents_str = [titre[0] for titre in documents]
+
+        # Afficher la liste déroulante pour choisir un document à supprimer
+        titre, ok = QInputDialog.getItem(self, "Supprimer un document", "Choisir le document à supprimer :",
                                          documents_str, 0, False)
+
         if ok:
             self.bibliotheque.supprimer_document(titre)
 
     def activer_emprunt(self):
-        # Crée une liste des titres des documents empruntables (en excluant ceux déjà empruntés)
-        documents_str = [doc.titre for doc in self.bibliotheque.documents if isinstance(doc, Livre) and doc.disponible]
+        # Récupérer la liste des livres empruntables (non empruntés)
+        self.bibliotheque.db.cur.execute("""
+            SELECT titre FROM Documents
+            WHERE type = 'Livre' AND id NOT IN (SELECT document_id FROM Emprunts)
+        """)
+        documents = self.bibliotheque.db.cur.fetchall()
+        documents_str = [doc[0] for doc in documents]
 
-        # Si aucun document n'est empruntable, affiche un message et retourne
         if not documents_str:
             self.afficher_message("Aucun document empruntable.")
             return
 
-        # Demande à l'utilisateur de choisir un abonné parmi ceux enregistrés
-        abonnés_str = [f"{abonne.prenom} {abonne.nom}" for abonne in self.bibliotheque.abonnes]
+        # Récupérer la liste des abonnés
+        self.bibliotheque.db.cur.execute("SELECT id, prenom, nom FROM Abonnes")
+        abonnes = self.bibliotheque.db.cur.fetchall()
+        abonnés_str = [f"{prenom} {nom}" for _, prenom, nom in abonnes]
+        abonne_id_map = {f"{prenom} {nom}": id for id, prenom, nom in abonnes}  # Associer ID avec nom complet
 
-        # Si aucun abonné n'est disponible, affiche un message et retourne
         if not abonnés_str:
             self.afficher_message("Aucun abonné enregistré.")
             return
 
+        # Sélectionner un abonné via la liste déroulante
         abonne, ok_abonne = QInputDialog.getItem(self, "Choisir un abonné", "Choisir l'abonné qui emprunte le livre : ",
                                                  abonnés_str, 0, False)
 
         if not ok_abonne:
             return
 
-        # Demande à l'utilisateur de choisir le document à emprunter
+        # Récupérer l'ID de l'abonné
+        abonne_id = abonne_id_map[abonne]
+
+        # Sélectionner un document à emprunter
         titre, ok = QInputDialog.getItem(self, "Emprunter un document", "Choisir le document à emprunter : ",
                                          documents_str, 0, False)
 
         if ok:
-            # Récupère l'objet abonné correspondant
-            abonne_objet = None
-            for a in self.bibliotheque.abonnes:
-                if f"{a.prenom} {a.nom}" == abonne:
-                    abonne_objet = a
-                    break
+            # Trouver l'ID du document
+            self.bibliotheque.db.cur.execute("SELECT id FROM Documents WHERE titre = ?", (titre,))
+            document_id = self.bibliotheque.db.cur.fetchone()
 
-            self.emprunts.emprunter_document(titre, abonne_objet)
+            if not document_id:
+                self.afficher_message("Erreur : Document introuvable.", "Erreur")
+                return
 
+            self.emprunts.emprunter_document(document_id[0], abonne_id)
 
     def activer_retour(self):
-        # Crée une liste des titres des documents empruntés
-        empruntes_str = [doc.titre for doc in self.bibliotheque.documents if
-                         isinstance(doc, Livre) and not doc.disponible]
+        # Récupérer la liste des livres empruntés
+        self.bibliotheque.db.cur.execute("""
+            SELECT Documents.titre FROM Documents
+            JOIN Emprunts ON Documents.id = Emprunts.document_id
+            WHERE Documents.type = 'Livre'
+        """)
+        empruntes = self.bibliotheque.db.cur.fetchall()
+        empruntes_str = [doc[0] for doc in empruntes]
 
         # Si aucun document n'est emprunté, affiche un message et retourne
         if not empruntes_str:
@@ -250,11 +256,10 @@ class Menu(QWidget):
             self.emprunts.retourner_document(titre)
 
     def close(self):
-        # Avant de fermer, on sauvegarde les données
         try:
-            SauvegardeFichiers.sauvegarder_abonnes(self.bibliotheque.abonnes)
-            SauvegardeFichiers.sauvegarder_documents(self.bibliotheque.documents)
-            SauvegardeFichiers.sauvegarder_emprunts(self.emprunts.emprunts)
+            self.bibliotheque.db.fermer_connexion()  # Fermer la connexion SQLite proprement
+            print("Connexion à la base de données fermée.")
         except Exception as e:
-            print(f'Erreur : {e}')
+            print(f"Erreur lors de la fermeture de la base de données : {e}")
+
         super().close()  # Appel à la méthode de fermeture de QWidget
