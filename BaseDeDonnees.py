@@ -1,5 +1,6 @@
-import sqlite3
+#Guillaume Pinat
 
+import sqlite3
 
 class BaseDeDonnees:
     def __init__(self, nom_db="bibliotheque.db"):

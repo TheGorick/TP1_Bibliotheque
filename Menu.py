@@ -129,15 +129,17 @@ class Menu(QWidget):
             self.afficher_message("Aucun abonné à supprimer.")
             return
 
-        # Transformer les tuples en une liste de noms pour l'affichage
         abonnes_str = [f"{prenom} {nom}" for prenom, nom in abonnes]
 
-        # Afficher la liste déroulante pour choisir un abonné à supprimer
-        abonne, ok = QInputDialog.getItem(self, "Supprimer un abonné", "Choisir l'abonné à supprimer :", abonnes_str, 0,False)
+        abonne, ok = QInputDialog.getItem(self, "Supprimer un abonné", "Choisir l'abonné à supprimer :", abonnes_str, 0,
+                                          False)
 
         if ok:
             prenom, nom = abonne.split()
-            self.bibliotheque.supprimer_abonne(prenom, nom)
+            success, message = self.bibliotheque.supprimer_abonne(prenom, nom)
+
+            # Afficher le message en pop-up
+            self.afficher_message(message)
 
     def activer_ajout_document(self):
         classification, ok = QInputDialog.getItem(self, "Ajouter un document", "Choisir le type de document :",
@@ -167,93 +169,82 @@ class Menu(QWidget):
             self.afficher_message("Document déjà existant.", "Erreur")
 
     def activer_supprimer_document(self):
-        # Récupérer la liste des documents depuis la base de données
-        self.bibliotheque.db.cur.execute("SELECT titre FROM Documents")
+        # Récupérer tous les documents disponibles
+        self.bibliotheque.db.cur.execute("SELECT id, titre FROM Documents")
         documents = self.bibliotheque.db.cur.fetchall()
 
         if not documents:
             self.afficher_message("Aucun document à supprimer.")
             return
 
-        # Transformer les résultats SQL en une liste de titres
-        documents_str = [titre[0] for titre in documents]
+        documents_str = [f"{doc_id} - {titre}" for doc_id, titre in documents]
 
-        # Afficher la liste déroulante pour choisir un document à supprimer
-        titre, ok = QInputDialog.getItem(self, "Supprimer un document", "Choisir le document à supprimer :",
-                                         documents_str, 0, False)
+        doc_selection, ok = QInputDialog.getItem(self, "Supprimer un document", "Choisir le document à supprimer :",
+                                                 documents_str, 0, False)
 
         if ok:
-            self.bibliotheque.supprimer_document(titre)
+            document_id = int(doc_selection.split(" - ")[0])  # Extraire l'ID du document
+            success, message = self.bibliotheque.supprimer_document(document_id)
+
+            # Afficher le message en pop-up
+            self.afficher_message(message)
 
     def activer_emprunt(self):
-        # Récupérer la liste des livres empruntables (non empruntés)
+        # Récupération des livres empruntables avec ID et titre pour éviter les conflits
         self.bibliotheque.db.cur.execute("""
-            SELECT titre FROM Documents
+            SELECT id, titre FROM Documents
             WHERE type = 'Livre' AND id NOT IN (SELECT document_id FROM Emprunts)
         """)
         documents = self.bibliotheque.db.cur.fetchall()
-        documents_str = [doc[0] for doc in documents]
+        documents_str = [f"{doc_id} - {titre}" for doc_id, titre in documents]  # ✅ Utilisation de l'ID
 
-        if not documents_str:
-            self.afficher_message("Aucun document empruntable.")
-            return
-
-        # Récupérer la liste des abonnés
+        # Récupération des abonnés directement sous forme "ID - Prénom Nom"
         self.bibliotheque.db.cur.execute("SELECT id, prenom, nom FROM Abonnes")
         abonnes = self.bibliotheque.db.cur.fetchall()
-        abonnés_str = [f"{prenom} {nom}" for _, prenom, nom in abonnes]
-        abonne_id_map = {f"{prenom} {nom}": id for id, prenom, nom in abonnes}  # Associer ID avec nom complet
+        abonnés_str = [f"{id_abonne} - {prenom} {nom}" for id_abonne, prenom, nom in
+                       abonnes]  # ✅ Plus besoin de `abonne_id_map`
 
-        if not abonnés_str:
-            self.afficher_message("Aucun abonné enregistré.")
+        # Sélection du document avec son ID
+        document_selection, ok_doc = QInputDialog.getItem(self, "Emprunter un document",
+                                                          "Choisir le document à emprunter :", documents_str, 0, False)
+        if not ok_doc:
             return
+        document_id = int(document_selection.split(" - ")[0])  # ✅ Récupération directe de l'ID
 
-        # Sélectionner un abonné via la liste déroulante
-        abonne, ok_abonne = QInputDialog.getItem(self, "Choisir un abonné", "Choisir l'abonné qui emprunte le livre : ",
-                                                 abonnés_str, 0, False)
-
+        # Sélection de l'abonné via son ID
+        abonne_selection, ok_abonne = QInputDialog.getItem(self, "Choisir un abonné", "Choisir l'abonné qui emprunte :",
+                                                           abonnés_str, 0, False)
         if not ok_abonne:
             return
+        abonne_id = int(abonne_selection.split(" - ")[0])
 
-        # Récupérer l'ID de l'abonné
-        abonne_id = abonne_id_map[abonne]
-
-        # Sélectionner un document à emprunter
-        titre, ok = QInputDialog.getItem(self, "Emprunter un document", "Choisir le document à emprunter : ",
-                                         documents_str, 0, False)
-
-        if ok:
-            # Trouver l'ID du document
-            self.bibliotheque.db.cur.execute("SELECT id FROM Documents WHERE titre = ?", (titre,))
-            document_id = self.bibliotheque.db.cur.fetchone()
-
-            if not document_id:
-                self.afficher_message("Erreur : Document introuvable.", "Erreur")
-                return
-
-            self.emprunts.emprunter_document(document_id[0], abonne_id)
+        success, message = self.emprunts.emprunter_document(document_id, abonne_id)  # ✅ Retourne un message
+        self.afficher_message(message)  # ✅ Affiche en pop-up
 
     def activer_retour(self):
-        # Récupérer la liste des livres empruntés
+        # Récupérer les livres empruntés avec leur ID et titre
         self.bibliotheque.db.cur.execute("""
-            SELECT Documents.titre FROM Documents
+            SELECT Documents.id, Documents.titre FROM Documents
             JOIN Emprunts ON Documents.id = Emprunts.document_id
             WHERE Documents.type = 'Livre'
         """)
         empruntes = self.bibliotheque.db.cur.fetchall()
-        empruntes_str = [doc[0] for doc in empruntes]
+        empruntes_str = [f"{doc_id} - {titre}" for doc_id, titre in empruntes]  # ✅ Utilisation de l'ID
 
-        # Si aucun document n'est emprunté, affiche un message et retourne
         if not empruntes_str:
             self.afficher_message("Aucun document emprunté.")
             return
 
-        # Utilise QInputDialog pour afficher une liste déroulante des documents empruntés
-        titre, ok = QInputDialog.getItem(self, "Retourner un document", "Choisir le document à retourner : ",
-                                         empruntes_str, 0, False)
+        # Sélectionner un document par son ID
+        document_selection, ok = QInputDialog.getItem(self, "Retourner un document",
+                                                      "Choisir le document à retourner :", empruntes_str, 0, False)
+        if not ok:
+            return
+        document_id = int(document_selection.split(" - ")[0])  # ✅ Extraction directe de l'ID
 
-        if ok:
-            self.emprunts.retourner_document(titre)
+        # Exécuter le retour du document et afficher le message
+        success, message = self.emprunts.retourner_document(document_id)
+        self.afficher_message(message)  # ✅ Affichage du message en pop-up
 
     def close(self):
         try:

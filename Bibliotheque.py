@@ -9,7 +9,7 @@ class Bibliotheque:
     def __init__(self):
         self.db = BaseDeDonnees()
 
-    # 🔹 Ajouter un abonné
+    #  Ajouter un abonné
     def ajouter_abonne(self, prenom, nom):
         # Vérifier si l'abonné existe déjà dans la base de données
         self.db.cur.execute("SELECT id FROM Abonnes WHERE prenom = ? AND nom = ?", (prenom, nom))
@@ -23,26 +23,42 @@ class Bibliotheque:
         print(f"Abonné {prenom} {nom} ajouté avec succès.")
         return True
 
-    # 🔹 Supprimer un abonné
+    #  Supprimer un abonné
     def supprimer_abonne(self, prenom, nom):
-        # Suppression directe de l'abonné sans vérification préalable
-        self.db.cur.execute("DELETE FROM Abonnes WHERE prenom = ? AND nom = ?", (prenom, nom))
-        self.db.conn.commit()
-        print(f"Abonné {prenom} {nom} supprimé avec succès.")
+        # Récupérer l'ID de l'abonné
+        self.db.cur.execute("SELECT id FROM Abonnes WHERE prenom = ? AND nom = ?", (prenom, nom))
+        abonne_id = self.db.cur.fetchone()[0]  # L'ID est garanti par la liste déroulante
 
-    # 🔹 Afficher tous les abonnés
+        # Vérifier si l'abonné a des emprunts en cours
+        self.db.cur.execute("SELECT COUNT(*) FROM Emprunts WHERE abonne_id = ?", (abonne_id,))
+        emprunts = self.db.cur.fetchone()[0]
+
+        if emprunts > 0:
+            message = f"Impossible de supprimer {prenom} {nom}, car il a encore {emprunts} emprunt(s) en cours."
+            print(message)
+            return False, message  # Retourne aussi le message pour l'affichage en pop-up
+
+        # Supprimer l'abonné
+        self.db.cur.execute("DELETE FROM Abonnes WHERE id = ?", (abonne_id,))
+        self.db.conn.commit()
+
+        message = f"L'abonné {prenom} {nom} a été supprimé avec succès."
+        print(message)
+        return True, message  # Retourne True + le message
+
+    #  Afficher tous les abonnés
     def afficher_abonnes(self):
-        self.db.cur.execute("SELECT prenom, nom FROM Abonnes")
+        self.db.cur.execute("SELECT id, prenom, nom FROM Abonnes")
         abonnes = self.db.cur.fetchall()
 
         if not abonnes:
             print("Aucun abonné enregistré.")
             return
 
-        for prenom, nom in abonnes:
-            print(f"{prenom} {nom}")
+        for id_abonne, prenom, nom in abonnes:
+            print(f"ID: {id_abonne} | Prenom: {prenom} | Nom: {nom}")
 
-    # 🔹 Ajouter un document
+    #  Ajouter un document
     def ajouter_document(self, document):
         type_doc = "Livre" if isinstance(document, Livre) else "Bande Dessinee"
 
@@ -61,20 +77,56 @@ class Bibliotheque:
         print(f"Document '{document.titre}' ajouté avec succès.")
         return True
 
-    # 🔹 Supprimer un document
-    def supprimer_document(self, titre):
-        self.db.cur.execute("DELETE FROM Documents WHERE titre = ?", (titre,))
-        self.db.conn.commit()
-        print(f"Document '{titre}' supprimé avec succès.")
+    #  Supprimer un document
+    def supprimer_document(self, document_id):
+        # Récupérer le titre du document avant la suppression
+        self.db.cur.execute("SELECT titre FROM Documents WHERE id = ?", (document_id,))
+        titre = self.db.cur.fetchone()[0]  # On récupère directement le titre
 
-    # 🔹 Afficher tous les documents
+        # Supprimer les emprunts liés au document
+        self.db.cur.execute("DELETE FROM Emprunts WHERE document_id = ?", (document_id,))
+        self.db.conn.commit()
+
+        # Supprimer le document de la base de données
+        self.db.cur.execute("DELETE FROM Documents WHERE id = ?", (document_id,))
+        self.db.conn.commit()
+
+        message = f'Le document "{titre}" a été supprimé avec succès.'
+        print(message)
+        return True, message  # Retourne True + le message
+
+    #  Afficher tous les documents
     def afficher_documents(self):
-        self.db.cur.execute("SELECT titre, auteur, type FROM Documents")
+        self.db.cur.execute("SELECT id, type, titre, auteur, dessinateur FROM Documents")
         documents = self.db.cur.fetchall()
 
         if not documents:
             print("Aucun document enregistré.")
             return
 
-        for titre, auteur, type_doc in documents:
-            print(f"{titre} ({type_doc}) - {auteur}")
+        # Définition des largeurs de colonnes (ajout de quelques espaces pour l'alignement)
+        col_widths = {"ID": 5, "Classification": 14, "Titre": 30, "Auteur": 22, "Disponibilité": 15, "Dessinateur": 22}
+
+        # Création de l'en-tête
+        header = f"| {'ID'.center(col_widths['ID'])} | {'Classification'.center(col_widths['Classification'])} | {'Titre'.center(col_widths['Titre'])} | {'Auteur'.center(col_widths['Auteur'])} | {'Disponibilité'.center(col_widths['Disponibilité'])} | {'Dessinateur'.center(col_widths['Dessinateur'])} |"
+        separator = "-" * len(header)
+
+        print(separator)
+        print(header)
+        print(separator)
+
+        # Affichage des documents avec alignement parfait
+        for id_doc, type_doc, titre, auteur, dessinateur in documents:
+            classification = "Livre" if type_doc == "Livre" else "BD"
+
+            if type_doc == "Livre":
+                disponibilite = \
+                self.db.cur.execute("SELECT COUNT(*) FROM Emprunts WHERE document_id = ?", (id_doc,)).fetchone()[0]
+                disponibilite = "Non" if disponibilite > 0 else "Oui"
+                row = f"| {str(id_doc).center(col_widths['ID'])} | {classification.center(col_widths['Classification'])} | {titre.center(col_widths['Titre'])} | {auteur.center(col_widths['Auteur'])} | {disponibilite.center(col_widths['Disponibilité'])} | {'-'.center(col_widths['Dessinateur'])} |"
+            else:
+                row = f"| {str(id_doc).center(col_widths['ID'])} | {classification.center(col_widths['Classification'])} | {titre.center(col_widths['Titre'])} | {auteur.center(col_widths['Auteur'])} | {'-'.center(col_widths['Disponibilité'])} | {dessinateur.center(col_widths['Dessinateur'])} |"
+
+            print(row)
+
+        print(separator)  # Ligne de fin
